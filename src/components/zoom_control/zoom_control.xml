@@ -1,0 +1,51 @@
+<templates>
+  <t t-name="o-spreadsheet-ZoomControl">
+    <div class="o-zoom-control">
+      <button 
+        class="o-zoom-button"
+        t-on-click="onZoomOut"
+        t-att-disabled="!canZoomOut"
+        title="Zoom out">
+        −
+      </button>
+      
+      <t t-if="!props.compact">
+        <div class="o-zoom-slider-container">
+          <input
+            type="range"
+            class="o-zoom-slider"
+            t-att-min="minZoom"
+            t-att-max="maxZoom"
+            t-att-value="state.zoom"
+            t-on-input="onSliderChange"
+            step="5"
+          />
+        </div>
+      </t>
+      
+      <div 
+        class="o-zoom-value"
+        t-on-click="onZoomValueClick"
+        title="Click to enter zoom level">
+        <t t-esc="state.zoom"/>%
+      </div>
+      
+      <button 
+        class="o-zoom-button"
+        t-on-click="onZoomIn"
+        t-att-disabled="!canZoomIn"
+        title="Zoom in">
+        +
+      </button>
+      
+      <!-- <t t-if="!props.compact and state.zoom !== 100">
+        <span 
+          class="o-zoom-reset"
+          t-on-click="onResetZoom"
+          title="Reset to 100%">
+          Reset
+        </span>
+      </t> -->
+    </div>
+  </t>
+</templates>

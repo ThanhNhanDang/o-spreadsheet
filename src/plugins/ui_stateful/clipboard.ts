@@ -1,0 +1,379 @@
+import { ClipboardCellsState } from "../../helpers/clipboard/clipboard_cells_state";
+import { ClipboardFigureState } from "../../helpers/clipboard/clipboard_figure_state";
+import { ClipboardOsState } from "../../helpers/clipboard/clipboard_os_state";
+import { isZoneValid } from "../../helpers/index";
+import {
+  ClipboardContent,
+  ClipboardCopyOptions,
+  ClipboardMIMEType,
+  ClipboardOperation,
+  ClipboardState,
+} from "../../types/clipboard";
+import {
+  Command,
+  CommandResult,
+  Dimension,
+  GridRenderingContext,
+  LAYERS,
+  LocalCommand,
+  UID,
+  Zone,
+  isCoreCommand,
+} from "../../types/index";
+import { UIPlugin } from "../ui_plugin";
+
+interface InsertDeleteCellsTargets {
+  cut: Zone[];
+  paste: Zone[];
+}
+
+/**
+ * Clipboard Plugin
+ *
+ * This clipboard manages all cut/copy/paste interactions internal to the
+ * application, and with the OS clipboard as well.
+ */
+export class ClipboardPlugin extends UIPlugin {
+  static layers = [LAYERS.Clipboard];
+  static getters = [
+    "getClipboardContent",
+    "getClipboardTextContent",
+    "isCutOperation",
+    "isPaintingFormat",
+  ] as const;
+
+  private status: "visible" | "invisible" = "invisible";
+  private state?: ClipboardState;
+  private lastPasteState?: ClipboardState;
+  private paintFormatStatus: "inactive" | "oneOff" | "persistent" = "inactive";
+  private originSheetId?: UID;
+
+  // ---------------------------------------------------------------------------
+  // Command Handling
+  // ---------------------------------------------------------------------------
+
+  allowDispatch(cmd: LocalCommand): CommandResult {
+    switch (cmd.type) {
+      case "CUT":
+        const zones = this.getters.getSelectedZones();
+        const state = this.getClipboardState(zones, cmd.type);
+        return state.isCutAllowed(zones);
+      case "PASTE":
+        if (!this.state) {
+          return CommandResult.EmptyClipboard;
+        }
+        const pasteOption =
+          cmd.pasteOption || (this.paintFormatStatus !== "inactive" ? "onlyFormat" : undefined);
+        return this.state.isPasteAllowed(cmd.target, { pasteOption });
+      case "PASTE_FROM_OS_CLIPBOARD": {
+        const state = new ClipboardOsState(cmd.text, this.getters, this.dispatch, this.selection);
+        return state.isPasteAllowed(cmd.target, { pasteOption: cmd.pasteOption });
+      }
+      case "COPY_PASTE_CELLS_ABOVE": {
+        const zones = this.getters.getSelectedZones();
+        if (zones.length > 1 || (zones[0].top === 0 && zones[0].bottom === 0)) {
+          return CommandResult.InvalidCopyPasteSelection;
+        }
+        break;
+      }
+      case "COPY_PASTE_CELLS_ON_LEFT": {
+        const zones = this.getters.getSelectedZones();
+        if (zones.length > 1 || (zones[0].left === 0 && zones[0].right === 0)) {
+          return CommandResult.InvalidCopyPasteSelection;
+        }
+        break;
+      }
+      case "INSERT_CELL": {
+        const { cut, paste } = this.getInsertCellsTargets(cmd.zone, cmd.shiftDimension);
+        const state = this.getClipboardStateForCopyCells(cut, "CUT", "shiftCells");
+        return state.isPasteAllowed(paste);
+      }
+      case "DELETE_CELL": {
+        const { cut, paste } = this.getDeleteCellsTargets(cmd.zone, cmd.shiftDimension);
+        const state = this.getClipboardStateForCopyCells(cut, "CUT", "shiftCells");
+        return state.isPasteAllowed(paste);
+      }
+      case "ACTIVATE_PAINT_FORMAT": {
+        if (this.paintFormatStatus !== "inactive") {
+          return CommandResult.AlreadyInPaintingFormatMode;
+        }
+      }
+    }
+    return CommandResult.Success;
+  }
+
+  handle(cmd: Command) {
+    switch (cmd.type) {
+      case "COPY":
+      case "CUT":
+        const zones = this.getters.getSelectedZones();
+        this.state = this.getClipboardState(zones, cmd.type);
+        this.status = "visible";
+        this.originSheetId = this.getters.getActiveSheetId();
+        break;
+      case "PASTE":
+        if (!this.state) {
+          break;
+        }
+        const pasteOption =
+          cmd.pasteOption || (this.paintFormatStatus !== "inactive" ? "onlyFormat" : undefined);
+        this.state.paste(cmd.target, { pasteOption, shouldPasteCF: true, selectTarget: true });
+        if (this.state.operation === "CUT") {
+          this.state = undefined;
+        }
+        this.lastPasteState = this.state;
+        if (this.paintFormatStatus === "oneOff") {
+          this.paintFormatStatus = "inactive";
+        }
+        this.status = "invisible";
+        break;
+      case "COPY_PASTE_CELLS_ABOVE":
+        {
+          const zone = this.getters.getSelectedZone();
+          const multipleRowsInSelection = zone.top !== zone.bottom;
+          const copyTarget = {
+            ...zone,
+            bottom: multipleRowsInSelection ? zone.top : zone.top - 1,
+            top: multipleRowsInSelection ? zone.top : zone.top - 1,
+          };
+          const state = this.getClipboardStateForCopyCells([copyTarget], "COPY");
+          state.paste([zone], {
+            pasteOption: undefined,
+            shouldPasteCF: true,
+            selectTarget: true,
+          });
+        }
+        break;
+      case "COPY_PASTE_CELLS_ON_LEFT":
+        {
+          const zone = this.getters.getSelectedZone();
+          const multipleColsInSelection = zone.left !== zone.right;
+          const copyTarget = {
+            ...zone,
+            right: multipleColsInSelection ? zone.left : zone.left - 1,
+            left: multipleColsInSelection ? zone.left : zone.left - 1,
+          };
+          const state = this.getClipboardStateForCopyCells([copyTarget], "COPY");
+          state.paste([zone], {
+            pasteOption: undefined,
+            shouldPasteCF: true,
+            selectTarget: true,
+          });
+        }
+        break;
+      case "CLEAN_CLIPBOARD_HIGHLIGHT":
+        this.status = "invisible";
+        break;
+      case "DELETE_CELL": {
+        const { cut, paste } = this.getDeleteCellsTargets(cmd.zone, cmd.shiftDimension);
+        if (!isZoneValid(cut[0])) {
+          this.dispatch("CLEAR_CELLS", {
+            target: [cmd.zone],
+            sheetId: this.getters.getActiveSheetId(),
+          });
+          break;
+        }
+        const state = this.getClipboardStateForCopyCells(cut, "CUT", "shiftCells");
+        state.paste(paste);
+        break;
+      }
+      case "INSERT_CELL": {
+        const { cut, paste } = this.getInsertCellsTargets(cmd.zone, cmd.shiftDimension);
+        const state = this.getClipboardStateForCopyCells(cut, "CUT", "shiftCells");
+        state.paste(paste);
+        break;
+      }
+      case "ADD_COLUMNS_ROWS": {
+        this.status = "invisible";
+
+        // If we add a col/row inside or before the cut area, we invalidate the clipboard
+        if (this.state?.operation !== "CUT" || cmd.sheetId !== this.state?.sheetId) {
+          return;
+        }
+        const isClipboardDirty = this.state.isColRowDirtyingClipboard(
+          cmd.position === "before" ? cmd.base : cmd.base + 1,
+          cmd.dimension
+        );
+        if (isClipboardDirty) {
+          this.state = undefined;
+        }
+        break;
+      }
+      case "REMOVE_COLUMNS_ROWS": {
+        this.status = "invisible";
+
+        // If we remove a col/row inside or before the cut area, we invalidate the clipboard
+        if (this.state?.operation !== "CUT" || cmd.sheetId !== this.state?.sheetId) {
+          return;
+        }
+        for (let el of cmd.elements) {
+          const isClipboardDirty = this.state.isColRowDirtyingClipboard(el, cmd.dimension);
+          if (isClipboardDirty) {
+            this.state = undefined;
+            break;
+          }
+        }
+        this.status = "invisible";
+        break;
+      }
+      case "PASTE_FROM_OS_CLIPBOARD":
+        this.state = new ClipboardOsState(cmd.text, this.getters, this.dispatch, this.selection);
+        this.state.paste(cmd.target, { pasteOption: cmd.pasteOption });
+        this.lastPasteState = this.state;
+        this.status = "invisible";
+        break;
+      case "REPEAT_PASTE": {
+        this.lastPasteState?.paste(cmd.target, {
+          pasteOption: cmd.pasteOption,
+          shouldPasteCF: true,
+          selectTarget: true,
+        });
+        break;
+      }
+      case "ACTIVATE_PAINT_FORMAT": {
+        const zones = this.getters.getSelectedZones();
+        this.state = this.getClipboardStateForCopyCells(zones, "COPY");
+        this.status = "visible";
+        if (cmd.persistent) {
+          this.paintFormatStatus = "persistent";
+        } else {
+          this.paintFormatStatus = "oneOff";
+        }
+        break;
+      }
+      case "DELETE_SHEET":
+        if (this.state?.operation !== "CUT") {
+          return;
+        }
+        if (this.originSheetId === cmd.sheetId) {
+          this.state = undefined;
+          this.status = "invisible";
+        }
+        break;
+      case "CANCEL_PAINT_FORMAT": {
+        this.paintFormatStatus = "inactive";
+        this.status = "invisible";
+        break;
+      }
+      default:
+        if (isCoreCommand(cmd)) {
+          this.status = "invisible";
+        }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Getters
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Format the current clipboard to a string suitable for being pasted in other
+   * programs.
+   *
+   * - add a tab character between each consecutive cells
+   * - add a newline character between each line
+   *
+   * Note that it returns \t if the clipboard is empty. This is necessary for the
+   * clipboard copy event to add it as data, otherwise an empty string is not
+   * considered as a copy content.
+   */
+  getClipboardContent(): ClipboardContent {
+    return this.state?.getClipboardContent() || { [ClipboardMIMEType.PlainText]: "\t" };
+  }
+
+  getClipboardTextContent(): string {
+    return this.state?.getClipboardContent()[ClipboardMIMEType.PlainText] || "\t";
+  }
+
+  isCutOperation(): boolean {
+    return this.state ? this.state.operation === "CUT" : false;
+  }
+
+  isPaintingFormat(): boolean {
+    return this.paintFormatStatus !== "inactive";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private methods
+  // ---------------------------------------------------------------------------
+
+  private getDeleteCellsTargets(zone: Zone, dimension: Dimension): InsertDeleteCellsTargets {
+    const sheetId = this.getters.getActiveSheetId();
+    let cut: Zone;
+    if (dimension === "COL") {
+      cut = {
+        ...zone,
+        left: zone.right + 1,
+        right: this.getters.getNumberCols(sheetId) - 1,
+      };
+    } else {
+      cut = {
+        ...zone,
+        top: zone.bottom + 1,
+        bottom: this.getters.getNumberRows(sheetId) - 1,
+      };
+    }
+    return { cut: [cut], paste: [zone] };
+  }
+
+  private getInsertCellsTargets(zone: Zone, dimension: Dimension): InsertDeleteCellsTargets {
+    const sheetId = this.getters.getActiveSheetId();
+    let cut: Zone;
+    let paste: Zone;
+    if (dimension === "COL") {
+      cut = {
+        ...zone,
+        right: this.getters.getNumberCols(sheetId) - 1,
+      };
+      paste = {
+        ...zone,
+        left: zone.right + 1,
+        right: zone.right + 1,
+      };
+    } else {
+      cut = {
+        ...zone,
+        bottom: this.getters.getNumberRows(sheetId) - 1,
+      };
+      paste = { ...zone, top: zone.bottom + 1, bottom: this.getters.getNumberRows(sheetId) - 1 };
+    }
+    return { cut: [cut], paste: [paste] };
+  }
+
+  private getClipboardStateForCopyCells(
+    zones: Zone[],
+    operation: ClipboardOperation,
+    mode: ClipboardCopyOptions = "copyPaste"
+  ) {
+    return new ClipboardCellsState(
+      zones,
+      operation,
+      this.getters,
+      this.dispatch,
+      this.selection,
+      mode
+    );
+  }
+
+  /**
+   * Get the clipboard state from the given zones.
+   */
+  private getClipboardState(zones: Zone[], operation: ClipboardOperation): ClipboardState {
+    const selectedFigureId = this.getters.getSelectedFigureId();
+    if (selectedFigureId) {
+      return new ClipboardFigureState(operation, this.getters, this.dispatch);
+    }
+    return new ClipboardCellsState(zones, operation, this.getters, this.dispatch, this.selection);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Grid rendering
+  // ---------------------------------------------------------------------------
+
+  drawGrid(renderingContext: GridRenderingContext) {
+    if (this.status !== "visible" || !this.state) {
+      return;
+    }
+    this.state.drawClipboard(renderingContext);
+  }
+}

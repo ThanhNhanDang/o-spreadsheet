@@ -1,0 +1,150 @@
+import { BordersPlugin } from "../plugins/core/borders";
+import { CellPlugin } from "../plugins/core/cell";
+import { ChartPlugin } from "../plugins/core/chart";
+import { ConditionalFormatPlugin } from "../plugins/core/conditional_format";
+import { DataValidationPlugin } from "../plugins/core/data_validation";
+import { FigurePlugin } from "../plugins/core/figures";
+import { FiltersPlugin } from "../plugins/core/filters";
+import { HeaderGroupingPlugin } from "../plugins/core/header_grouping";
+import { HeaderSizePlugin } from "../plugins/core/header_size";
+import { HeaderVisibilityPlugin } from "../plugins/core/header_visibility";
+import { ImagePlugin } from "../plugins/core/image";
+import { MergePlugin } from "../plugins/core/merge";
+import { RangeAdapter } from "../plugins/core/range";
+import { SettingsPlugin } from "../plugins/core/settings";
+import { SheetPlugin } from "../plugins/core/sheet";
+import { EvaluationDataValidationPlugin } from "../plugins/ui_core_views";
+import { EvaluationPlugin } from "../plugins/ui_core_views/cell_evaluation";
+import { CustomColorsPlugin } from "../plugins/ui_core_views/custom_colors";
+import { EvaluationChartPlugin } from "../plugins/ui_core_views/evaluation_chart";
+import { EvaluationConditionalFormatPlugin } from "../plugins/ui_core_views/evaluation_conditional_format";
+import { HeaderSizeUIPlugin } from "../plugins/ui_core_views/header_sizes_ui";
+import { AutofillPlugin } from "../plugins/ui_feature/autofill";
+import { AutomaticSumPlugin } from "../plugins/ui_feature/automatic_sum";
+import { CellPopoverPlugin } from "../plugins/ui_feature/cell_popovers";
+import { CollaborativePlugin } from "../plugins/ui_feature/collaborative";
+import { FindAndReplacePlugin } from "../plugins/ui_feature/find_and_replace";
+import { HeaderVisibilityUIPlugin } from "../plugins/ui_feature/header_visibility_ui";
+import { HighlightPlugin } from "../plugins/ui_feature/highlight";
+import { HistoryPlugin } from "../plugins/ui_feature/local_history";
+import { RendererPlugin } from "../plugins/ui_feature/renderer";
+import { SelectionInputsManagerPlugin } from "../plugins/ui_feature/selection_inputs_manager";
+import { SortPlugin } from "../plugins/ui_feature/sort";
+import { SplitToColumnsPlugin } from "../plugins/ui_feature/split_to_columns";
+import { UIOptionsPlugin } from "../plugins/ui_feature/ui_options";
+import { SheetUIPlugin } from "../plugins/ui_feature/ui_sheet";
+import { ClipboardPlugin } from "../plugins/ui_stateful/clipboard";
+import { EditionPlugin } from "../plugins/ui_stateful/edition";
+import { FilterEvaluationPlugin } from "../plugins/ui_stateful/filter_evaluation";
+import { HeaderPositionsUIPlugin } from "../plugins/ui_stateful/header_positions";
+import { GridSelectionPlugin } from "../plugins/ui_stateful/selection";
+import { SheetViewPlugin } from "../plugins/ui_stateful/sheetview";
+
+import { ZoomPlugin } from "../plugins/core/zoom";
+import { ZoomUIPlugin } from "../plugins/ui_feature/zoom_ui";
+// -----------------------------------------------------------------------------
+// Getters
+// -----------------------------------------------------------------------------
+
+/**
+ * Union of all getter names of a plugin.
+ *
+ * e.g. With the following plugin
+ * ```ts
+ * class MyPlugin {
+ *   static getters = [
+ *     "getCell",
+ *     "getCellValue",
+ *   ] as const;
+ *   getCell() { ... }
+ *   getCellValue() { ... }
+ * }
+ * ```
+ * `type Names = GetterNames<typeof MyPlugin>` is equivalent to
+ * `type Names = "getCell" | "getCellValue"`
+ *
+ * Some technical comments:
+ *
+ * - Since the getter names are in a static array, the type of the plugin must
+ *   be given, not the class itself.
+ *
+ * - we need to index the getters array with every index:
+ *   `Plugin["getters"][0] | Plugin["getters"][1] | Plugin["getters"][2] | ...`
+ *   which is equivalent to `Plugin["getters"][0 | 1 | 2 | ...]`.
+ *   This can be generalized because the union of all indices `0 | 1 | 2 | 3 | ...`
+ *   is actually the type `number`.
+ */
+type GetterNames<Plugin extends { getters: readonly string[] }> = Plugin["getters"][number];
+
+/**
+ * Extract getter methods from a plugin, based on its `getters` static array.
+ * @example
+ * class MyPlugin {
+ *   static getters = [
+ *     "getCell",
+ *     "getCellValue",
+ *   ] as const;
+ *   getCell() { ... }
+ *   getCellValue() { ... }
+ * }
+ * type MyPluginGetters = PluginGetters<typeof MyPlugin>;
+ * // MyPluginGetters is equivalent to:
+ * // {
+ * //   getCell: () => ...,
+ * //   getCellValue: () => ...,
+ * // }
+ */
+type PluginGetters<Plugin extends { new (...args: unknown[]): any; getters: readonly string[] }> =
+  Pick<InstanceType<Plugin>, GetterNames<Plugin>>;
+
+type RangeAdapterGetters = Pick<RangeAdapter, GetterNames<typeof RangeAdapter>>;
+
+export type CoreGetters = PluginGetters<typeof SheetPlugin> &
+  PluginGetters<typeof HeaderSizePlugin> &
+  PluginGetters<typeof HeaderVisibilityPlugin> &
+  PluginGetters<typeof CellPlugin> &
+  PluginGetters<typeof MergePlugin> &
+  PluginGetters<typeof BordersPlugin> &
+  PluginGetters<typeof ChartPlugin> &
+  PluginGetters<typeof ImagePlugin> &
+  PluginGetters<typeof FigurePlugin> &
+  RangeAdapterGetters &
+  PluginGetters<typeof ConditionalFormatPlugin> &
+  PluginGetters<typeof FiltersPlugin> &
+  PluginGetters<typeof SettingsPlugin> &
+  PluginGetters<typeof HeaderGroupingPlugin> &
+  PluginGetters<typeof DataValidationPlugin> &
+   PluginGetters<typeof ZoomPlugin>; // ← THÊM DÒNG NÀY
+
+export type Getters = {
+  isReadonly: () => boolean;
+  isDashboard: () => boolean;
+} & CoreGetters &
+  PluginGetters<typeof AutofillPlugin> &
+  PluginGetters<typeof AutomaticSumPlugin> &
+  PluginGetters<typeof HistoryPlugin> &
+  PluginGetters<typeof ClipboardPlugin> &
+  PluginGetters<typeof EditionPlugin> &
+  PluginGetters<typeof EvaluationPlugin> &
+  PluginGetters<typeof EvaluationChartPlugin> &
+  PluginGetters<typeof EvaluationConditionalFormatPlugin> &
+  PluginGetters<typeof FindAndReplacePlugin> &
+  PluginGetters<typeof HeaderVisibilityUIPlugin> &
+  PluginGetters<typeof HighlightPlugin> &
+  PluginGetters<typeof CustomColorsPlugin> &
+  PluginGetters<typeof AutomaticSumPlugin> &
+  PluginGetters<typeof RendererPlugin> &
+  PluginGetters<typeof GridSelectionPlugin> &
+  PluginGetters<typeof SelectionInputsManagerPlugin> &
+  PluginGetters<typeof CollaborativePlugin> &
+  PluginGetters<typeof SortPlugin> &
+  PluginGetters<typeof UIOptionsPlugin> &
+  PluginGetters<typeof SheetUIPlugin> &
+  PluginGetters<typeof SheetViewPlugin> &
+  PluginGetters<typeof CellPopoverPlugin> &
+  PluginGetters<typeof FilterEvaluationPlugin> &
+  PluginGetters<typeof SplitToColumnsPlugin> &
+  PluginGetters<typeof HeaderSizeUIPlugin> &
+  PluginGetters<typeof EvaluationDataValidationPlugin> &
+  PluginGetters<typeof HeaderPositionsUIPlugin> &
+  PluginGetters<typeof ZoomUIPlugin>; // ← THÊM DÒNG NÀY

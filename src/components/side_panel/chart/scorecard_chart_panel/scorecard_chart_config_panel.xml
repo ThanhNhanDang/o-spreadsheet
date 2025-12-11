@@ -1,0 +1,41 @@
+<templates>
+  <t t-name="o-spreadsheet-ScorecardChartConfigPanel">
+    <div>
+      <div class="o-section o-data-series">
+        <div class="o-section-title">Key value</div>
+        <SelectionInput
+          ranges="() => [this.getKeyValueRange()]"
+          isInvalid="isKeyValueInvalid"
+          hasSingleRange="true"
+          required="true"
+          onSelectionChanged="(ranges) => this.onKeyValueRangeChanged(ranges)"
+          onSelectionConfirmed="() => this.updateKeyValueRange()"
+        />
+      </div>
+      <div class="o-section o-data-labels">
+        <div class="o-section-title">Baseline configuration</div>
+        <div class="o-section-subtitle">Baseline value</div>
+        <SelectionInput
+          ranges="() => [this.getBaselineRange()]"
+          isInvalid="isBaselineInvalid"
+          hasSingleRange="true"
+          onSelectionChanged="(ranges) => this.onBaselineRangeChanged(ranges)"
+          onSelectionConfirmed="() => this.updateBaselineRange()"
+        />
+        <div class="o-section-subtitle">Baseline format</div>
+        <select
+          t-att-value="props.definition.baselineMode"
+          class="o-input o-type-selector o-optional"
+          t-on-change="(ev) => this.updateBaselineMode(ev)">
+          <option value="text">Absolute value</option>
+          <option value="difference">Value change from key value</option>
+          <option value="percentage">Percentage change from key value</option>
+        </select>
+      </div>
+
+      <div class="o-section" t-if="errorMessages.length">
+        <ValidationMessages messages="errorMessages" msgType="'error'"/>
+      </div>
+    </div>
+  </t>
+</templates>
