@@ -1150,6 +1150,7 @@ export type CoreCommand =
   | UpdateLocaleCommand;
 
 export type LocalCommand =
+| SetZoomCommand
   | ZoomInCommand
   | ZoomOutCommand
   | SetZoomLevelCommand

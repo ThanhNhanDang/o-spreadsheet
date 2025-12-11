@@ -103,7 +103,6 @@ export class SheetViewPlugin extends UIPlugin {
     "isPositionVisible",
     "getAllActiveViewportsZonesAndRect",
     "getRect",
-    "getZoomRatio", // Thêm getter mới
   ] as const;
 
   private viewports: Record<UID, SheetViewports | undefined> = {};
@@ -168,15 +167,16 @@ export class SheetViewPlugin extends UIPlugin {
       }
     }
   }
+  // Helper để set zoom và tính toán lại viewport
   private setZoom(zoom: number) {
     this.zoomRatio = zoom;
-    // Trigger resize để tính toán lại số lượng ô hiển thị trong viewport
+    // Gọi lại logic resize để tính toán lại kích thước viewport dựa trên zoom mới
     this.resizeSheetView(this.sheetViewHeight, this.sheetViewWidth, this.gridOffsetX, this.gridOffsetY);
     this.shouldAdjustViewports = true;
   }
 
   getZoomRatio(): number {
-    return this.zoomRatio;
+    return this.getters.getZoomScale();
   }
 
   handle(cmd: Command) {
@@ -189,7 +189,8 @@ export class SheetViewPlugin extends UIPlugin {
 
     switch (cmd.type) {
       case "SET_ZOOM":
-        this.setZoom(cmd.zoom);
+        // SỬA Ở ĐÂY: Chia cho 100 để chuyển từ phần trăm (110) sang tỷ lệ (1.1)
+        this.setZoom(cmd.zoom / 100);
         break;
       case "START":
         this.selection.observe(this, {
@@ -311,8 +312,12 @@ export class SheetViewPlugin extends UIPlugin {
    */
   getColIndex(x: Pixel): HeaderIndex {
     const sheetId = this.getters.getActiveSheetId();
-    // Điều chỉnh tọa độ x dựa trên zoom
+
+    // --- ĐOẠN ĐÃ SỬA ---
+    // Trước khi tìm cột, chia tọa độ chuột cho tỷ lệ zoom
     const unscaledX = x / this.zoomRatio;
+    // -------------------
+
     return Math.max(...this.getSubViewports(sheetId).map((viewport) => viewport.getColIndex(unscaledX)));
   }
 
@@ -326,11 +331,12 @@ export class SheetViewPlugin extends UIPlugin {
    */
   getRowIndex(y: Pixel): HeaderIndex {
     const sheetId = this.getters.getActiveSheetId();
-    // Điều chỉnh tọa độ y dựa trên zoom
+    // --- ĐOẠN ĐÃ SỬA ---
     const unscaledY = y / this.zoomRatio;
+    // -------------------
+
     return Math.max(...this.getSubViewports(sheetId).map((viewport) => viewport.getRowIndex(unscaledY)));
   }
-
   getSheetViewDimensionWithHeaders(): DOMDimension {
     return {
       width: this.sheetViewWidth + this.gridOffsetX,
