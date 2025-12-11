@@ -34,7 +34,7 @@ export function useGridDrawing(refName: string, model: Model, canvasSize: () => 
     // you need to shift the coordinates by 0.5 perpendicular to the line's direction.
     // http://diveintohtml5.info/canvas.html#pixel-madness
     ctx.translate(-CANVAS_SHIFT, -CANVAS_SHIFT);
-    ctx.scale(zoom, zoom);
-    model.drawGrid(renderingContext);
+    ctx.scale(dpr, dpr);
+    model.drawGrid(renderingContext, zoom);
   }
 }

@@ -595,12 +595,12 @@ export class Model extends EventBus<any> implements CommandDispatcher {
    * context. This is probably the way we should do if we want to be able to
    * freeze a part of the grid (so, we would need to render different zones)
    */
-  drawGrid(context: GridRenderingContext) {
+  drawGrid(context: GridRenderingContext, zoom: number = 1) {
     // we make sure here that the viewport is properly positioned: the offsets
     // correspond exactly to a cell
     for (let [renderer, layer] of this.renderers) {
       context.ctx.save();
-      renderer.drawGrid(context, layer);
+      renderer.drawGrid(context, layer, zoom);
       context.ctx.restore();
     }
   }

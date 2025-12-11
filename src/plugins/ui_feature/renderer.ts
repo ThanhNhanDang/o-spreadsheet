@@ -116,10 +116,8 @@ export class RendererPlugin extends UIPlugin {
   // Grid rendering
   // ---------------------------------------------------------------------------
 
-  drawGrid(renderingContext: GridRenderingContext, layer: LAYERS) {
+  drawGrid(renderingContext: GridRenderingContext, layer: LAYERS, zoom: number = 1) {
     const { ctx } = renderingContext;
-    const zoom = this.getters.getZoomRatio(); // Lấy tỷ lệ zoom từ store
-
     switch (layer) {
       case LAYERS.Background:
         // Vẽ background toàn cục (thường là màu trắng nền)

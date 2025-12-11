@@ -135,11 +135,11 @@ export class SheetViewPlugin extends UIPlugin {
           this.checkValuesAreDifferent,
           this.checkPositiveDimension
         )(cmd);
-      case "SET_ZOOM":
-        if (cmd.zoom <= 0.1 || cmd.zoom > 5) {
-             return CommandResult.InvalidZoomLevel; // Giả sử bạn có define error này hoặc return cancelled
-        }
-        return CommandResult.Success;
+      // case "SET_ZOOM":
+      //   if (cmd.zoom <= 0.1 || cmd.zoom > 5) {
+      //     return CommandResult.InvalidZoomLevel; // Giả sử bạn có define error này hoặc return cancelled
+      //   }
+      //   return CommandResult.Success;
       default:
         return CommandResult.Success;
     }
@@ -707,23 +707,15 @@ export class SheetViewPlugin extends UIPlugin {
     };
   }
 
- /**
-   * Cập nhật resetViewports:
-   * Viewport logic cần biết rằng "không gian thực" nhỏ hơn (nếu zoom in) hoặc lớn hơn (nếu zoom out).
-   * Ta chia chiều rộng/cao của khung nhìn cho zoomRatio.
-   */
   private resetViewports(sheetId: UID) {
     if (!this.getters.tryGetSheet(sheetId)) {
       return;
     }
     const { xSplit, ySplit } = this.getters.getPaneDivisions(sheetId);
-    // Lấy kích thước hiển thị thực tế
     const effectiveWidth = this.sheetViewWidth / this.zoomRatio;
     const effectiveHeight = this.sheetViewHeight / this.zoomRatio;
-    
-    // ... (Giữ nguyên logic lấy nCols, nRows...)
-
-    // Sử dụng effectiveWidth/Height thay vì this.sheetViewWidth/Height cho các logic tính toán viewport bên dưới
+    const nCols = this.getters.getNumberCols(sheetId);
+    const nRows = this.getters.getNumberRows(sheetId);
     const colOffset = Math.min(
       this.getters.getColRowOffset("COL", 0, xSplit, sheetId),
       effectiveWidth
@@ -734,9 +726,6 @@ export class SheetViewPlugin extends UIPlugin {
     );
     const unfrozenWidth = Math.max(effectiveWidth - colOffset, 0);
     const unfrozenHeight = Math.max(effectiveHeight - rowOffset, 0);
-    // ... (Phần còn lại giữ nguyên, chỉ đảm bảo khởi tạo InternalViewport với width/height đã điều chỉnh)
-    // Ví dụ đoạn khởi tạo sheetViewports:
-    // width: colOffset (đã tính theo effective), height: unfrozenHeight (đã tính theo effective)...
     const { xRatio, yRatio } = this.getFrozenSheetViewRatio(sheetId);
     const canScrollHorizontally = xRatio < 1.0;
     const canScrollVertically = yRatio < 1.0;

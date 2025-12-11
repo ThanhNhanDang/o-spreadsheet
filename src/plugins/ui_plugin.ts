@@ -54,5 +54,5 @@ export class UIPlugin<State = any> extends BasePlugin<State, Command> {
   // Grid rendering
   // ---------------------------------------------------------------------------
 
-  drawGrid(ctx: GridRenderingContext, layer: LAYERS) {}
+  drawGrid(ctx: GridRenderingContext, layer: LAYERS, zoom: number = 1) {}
 }
